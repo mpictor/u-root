@@ -1,0 +1,25 @@
+#!/bin/sh
+
+w=/home/mark/go/src/github.com/u-root/u-root/work
+ovmf=/usr/share/edk2-ovmf
+#k=/usr/src/uroot.krnl
+#k=/usr/src/linux-4.14.83-gentoo/arch/x86/boot/bzImage
+k=$w/uroot.krnl
+
+qemu-system-x86_64 -kernel $k \
+                   -initrd $w/initramfs.cpio \
+                   -smp 1 -cpu host -enable-kvm -usb -device usb-tablet -m 4096 \
+                   -drive if=pflash,format=raw,unit=0,readonly=on,file=$ovmf/OVMF_CODE.fd \
+                   -drive if=pflash,format=raw,unit=1,readonly=off,file=$w/OVMF_VARS.fd \
+# #                    -nographic -append "console=ttyS0" \
+#                    -boot menu=on
+
+#-nographic -serial mon:stdio -display none -curses -append "console=ttyS0 "
+
+
+# speed boot
+# track init time
+#  initcall_debug loglevel=8
+#  linux-123/scripts/bootgraph.pl <dmesg >graph.svg
+# quiet
+# networking in modules instead of built-in
