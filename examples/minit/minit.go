@@ -6,6 +6,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -34,6 +35,16 @@ const (
 )
 
 func main() {
+	id := flag.Bool("id", false, "dump config and exit")
+	d := flag.Bool("d", false, "quiet")
+	flag.Parse()
+	if *id {
+		fmt.Printf("%s:\nptuuid = %s\nlabel = %s\npartuuid = %s\n", os.Args[0], PTUUID, PARTLABEL, PARTUUID)
+		return
+	}
+	if *d {
+		fmt.Printf("quiet mode (ignored)\n")
+	}
 	devs := getBlockDevs()
 	tgt := findPartByUUIDs(devs, PTUUID, PARTUUID)
 	log.Printf("device: %s", tgt)
