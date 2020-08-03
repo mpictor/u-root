@@ -23,6 +23,9 @@ const (
 	notset  = "is not set"
 )
 
+//TODO integrate with kver?
+//integrate with cpio extraction?
+//extract config from vmlinuz?
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Reads kernel config from /proc/config.gz, optionally filtering\n")
