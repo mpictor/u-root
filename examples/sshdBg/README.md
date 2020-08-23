@@ -74,3 +74,18 @@ The antminer firmware has a mechanism to update using a downloaded file.
 Figure out how to create one.
 
 Also figure out how to add an update mechanism to the u-root image so it can update itself.
+
+### NAND layout
+
+| parition |     desc     |           notes              |
+|----------|--------------|------------------------------|
+|0         |spl           |                              |
+|1         |spl_backup1   |                              |
+|2         |spl_backup2   |                              |
+|3         |spl_backup3   |                              |
+|4         |u-boot        |                              |
+|5         |bootenv       |empty - all 0xff              |
+|6         |fdt           |device tree                   |
+|7         |kernel        |uImage containing kernel      |
+|8         |root          |uImage containing gzipped cpio|
+|9         |config        |jffs2 filesystem at +0x3c0000 |
