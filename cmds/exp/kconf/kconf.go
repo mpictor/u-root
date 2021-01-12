@@ -13,9 +13,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/u-root/u-root/pkg/boot/bzimage"
 )
 
 const (
@@ -37,21 +40,39 @@ func main() {
 	n := flag.Bool("n", false, "show only not configured")
 	f := flag.String("f", "", "filter on config symbol, case insensitive")
 	p := flag.Bool("p", true, "pretty: trim prefix; also suffix if -y/-m/-n")
+	k := flag.String("k", "", "use kernel image rather than /proc/config.gz")
 	flag.Parse()
 
-	configgz, err := os.Open(cfgfile)
-	if err != nil {
-		log.Fatalf("cannot open %s: %s", cfgfile, err)
+	var cfgIn io.Reader
+	if len(*k) > 0 {
+		image, err := ioutil.ReadFile(*k)
+		if err != nil {
+			log.Fatal(err)
+		}
+		br := &bzimage.BzImage{}
+		if err = br.UnmarshalBinary(image); err != nil {
+			log.Fatal(err)
+		}
+		cfg, err := br.ReadConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
+		cfgIn = strings.NewReader(cfg)
+	} else {
+		configgz, err := os.Open(cfgfile)
+		if err != nil {
+			log.Fatalf("cannot open %s: %s", cfgfile, err)
+		}
+		defer configgz.Close()
+		gz, err := gzip.NewReader(configgz)
+		if err != nil {
+			log.Fatalf("decompress %s: %s", cfgfile, err)
+		}
+		defer gz.Close()
+		cfgIn = gz
 	}
-	defer configgz.Close()
-	gz, err := gzip.NewReader(configgz)
-	if err != nil {
-		log.Fatalf("decompress %s: %s", cfgfile, err)
-	}
-	defer gz.Close()
-
 	filter := strings.ToUpper(*f)
-	scanner := bufio.NewScanner(gz)
+	scanner := bufio.NewScanner(cfgIn)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if *y && !strings.HasSuffix(line, "=y") {
@@ -80,7 +101,7 @@ func main() {
 		}
 		fmt.Println(line)
 	}
-	if scanner.Err(); err != nil && err != io.EOF {
+	if err := scanner.Err(); err != nil && err != io.EOF {
 		log.Fatalf("reading %s: %s", cfgfile, err)
 	}
 }
