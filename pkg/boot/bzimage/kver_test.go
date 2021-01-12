@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 
-package kver
+package bzimage
 
 import (
 	"bytes"
@@ -20,8 +20,8 @@ const (
 	ancient  = "2.6.24.111 #606 Mon Apr 14 00:06:11 CEST 2014"
 )
 
-//func GetKDesc(k io.ReadSeeker) (string, error)
-func TestGetKDesc(t *testing.T) {
+//func KVer(k io.ReadSeeker) (string, error)
+func TestKVer(t *testing.T) {
 	items := []bufItem{
 		{510, []byte{0x55, 0xaa}}, //boot sig
 		{514, []byte("HdrS")},     //kernel header
@@ -32,7 +32,7 @@ func TestGetKDesc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	str, err := GetKDesc(f)
+	str, err := KVer(f)
 	if err != nil {
 		t.Error(err)
 	}
@@ -123,16 +123,4 @@ func TestParseDesc(t *testing.T) {
 			}
 		})
 	}
-}
-
-func (l KInfo) Equal(r KInfo) bool {
-	return l.Release == r.Release &&
-		l.Builder == r.Builder &&
-		l.Version == r.Version &&
-		l.BuildNum == r.BuildNum &&
-		l.BuildTime.Equal(r.BuildTime) &&
-		l.Maj == r.Maj &&
-		l.Min == r.Min &&
-		l.Patch == r.Patch &&
-		l.LocalVer == r.LocalVer
 }

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 //
 
-package kver
+package bzimage
 
 import (
 	"bytes"
@@ -28,17 +28,18 @@ off val
 526 (2 bytes, little endian) + 0x200 -> start of null-terminated version string
 */
 
+const kverMax = 1024 //arbitrary
+
 var (
 	ErrBootSig = errors.New("missing 0x55AA boot sig")
 	ErrBadSig  = errors.New("missing kernel header sig")
 	ErrBadOff  = errors.New("null version string offset")
-	ErrBadStr  = errors.New("missing termination in version string")
 	ErrParse   = errors.New("parse error")
 )
 
-//Read kernel version string
-func GetKDesc(k io.ReadSeeker) (string, error) {
-	var buf [1024]byte
+//Read kernel version string. See also: (*BZImage)Kver()
+func KVer(k io.ReadSeeker) (string, error) {
+	var buf = make([]byte, kverMax)
 	_, err := k.Seek(0, io.SeekStart)
 	if err != nil {
 		return "", err
@@ -64,6 +65,20 @@ func GetKDesc(k io.ReadSeeker) (string, error) {
 	if _, err := k.Read(buf[:]); err != nil {
 		return "", err
 	}
+	return nullterm(buf), nil
+}
+
+//Read kernel version string. See also: KVer()
+func (bz *BzImage) KVer(imgbytes []byte) string {
+	if bz.Header.Kveraddr == 0 {
+		return ("(unknown)")
+	}
+	start := uint64(bz.Header.Kveraddr + 0x200)
+	return nullterm(imgbytes[start : start+kverMax])
+}
+
+//read c string from buffer
+func nullterm(buf []byte) string {
 	var i int
 	var b byte
 	for i, b = range buf {
@@ -71,10 +86,7 @@ func GetKDesc(k io.ReadSeeker) (string, error) {
 			break
 		}
 	}
-	if i == 1023 {
-		return "", ErrBadStr
-	}
-	return string(buf[:i]), nil
+	return string(buf[:i])
 }
 
 type KInfo struct {
@@ -91,6 +103,18 @@ type KInfo struct {
 	BuildTime       time.Time //from Version
 	Maj, Min, Patch uint64    //from Release
 	LocalVer        string    //from Release
+}
+
+func (l KInfo) Equal(r KInfo) bool {
+	return l.Release == r.Release &&
+		l.Builder == r.Builder &&
+		l.Version == r.Version &&
+		l.BuildNum == r.BuildNum &&
+		l.BuildTime.Equal(r.BuildTime) &&
+		l.Maj == r.Maj &&
+		l.Min == r.Min &&
+		l.Patch == r.Patch &&
+		l.LocalVer == r.LocalVer
 }
 
 const layout = "Mon Jan 2 15:04:05 MST 2006"
