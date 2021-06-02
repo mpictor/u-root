@@ -7,7 +7,9 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	fp "path/filepath"
 	"strconv"
 	"strings"
 
@@ -17,9 +19,12 @@ import (
 )
 
 var (
-	flagDumpBin  = flag.String("dump-bin", "", `Do not decode the entries, instead dump the DMI data to a file in binary form. The generated file is suitable to pass to --from-dump later.`)
-	flagFromDump = flag.String("from-dump", "", `Read the DMI data from a binary file previously generated using --dump-bin.`)
-	flagType     = flag.StringSliceP("type", "t", nil, `Only  display  the  entries of type TYPE. TYPE can be either a DMI type number, or a comma-separated list of type numbers, or a keyword from the following list: bios, system, baseboard, chassis, processor, memory, cache, connector, slot. If this option is used more than once, the set of displayed entries will be the union of all the given types. If TYPE is not provided or not valid, a list of all valid keywords is printed and dmidecode exits with an error.`)
+	flagDumpBin    = flag.String("dump-bin", "", `Do not decode the entries, instead dump the DMI data to a file in binary form. The generated file is suitable to pass to --from-dump later.`)
+	flagFromDump   = flag.String("from-dump", "", `Read the DMI data from a binary file previously generated using --dump-bin.`)
+	flagType       = flag.StringSliceP("type", "t", nil, `Only  display  the  entries of type TYPE. TYPE can be either a DMI type number, or a comma-separated list of type numbers, or a keyword from the following list: bios, system, baseboard, chassis, processor, memory, cache, connector, slot. If this option is used more than once, the set of displayed entries will be the union of all the given types. If TYPE is not provided or not valid, a list of all valid keywords is printed and dmidecode exits with an error.`)
+	flagSysConv    = flag.String("sys-fw-conv", "", `Convert files originally captured from /sys/firmware/dmi/tables into dump files. This is the path to the file 'DMI' from that dir. See also: --sys-fw-ep, --sys-fw-out`)
+	flagSysConvEp  = flag.String("sys-fw-ep", "", `Used in conjunction with --sys-fw-conv, this is the path to what was 'smbios-entry-point'. If empty, looks for a file with that name in the same dir as --sys-fw-conv.`)
+	flagSysConvOut = flag.String("sys-fw-out", "dmi.raw", "Used in conjunction with --sys-fw-conv, this is the output `path`.")
 	// NB: When adding flags, update resetFlags in dmidecode_test.
 )
 
@@ -140,8 +145,79 @@ func dmiDecode(textOut io.Writer) *dmiDecodeError {
 	return nil
 }
 
+//Convert files from the format found in /sys/firmware/dmi/tables into the dmidecode --dump-bin format.
+func convertSysFw() error {
+	if len(*flagSysConvOut) == 0 {
+		return fmt.Errorf("-sys-fw-out cannot be empty")
+	}
+	tableData, err := ioutil.ReadFile(*flagSysConv)
+	if err != nil {
+		return err
+	}
+	epf := *flagSysConvEp
+	if len(epf) == 0 {
+		epf = fp.Dir(*flagSysConv) + "/smbios_entry_point"
+	}
+	entryData, err := ioutil.ReadFile(epf)
+	if err != nil {
+		return err
+	}
+	e32, e64, err := smbios.ParseEntry(entryData)
+	if err != nil {
+		return fmt.Errorf("error parsing entry point structure: %v", err)
+	}
+
+	out, err := os.Create(*flagSysConvOut)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	var hdr []byte
+	if e64 != nil {
+		e64.StructTableAddr = 0x20
+		hdr, err = e64.MarshalBinary()
+		if err != nil {
+			return err
+		}
+	} else {
+		e32.StructTableAddr = 0x20
+		hdr, err = e32.MarshalBinary()
+		if err != nil {
+			return err
+		}
+	}
+	_, err = out.Write(hdr)
+	if err != nil {
+		return err
+	}
+	if e64 != nil {
+		_, err = out.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err = out.Write([]byte{0})
+		if err != nil {
+			return err
+		}
+	}
+	_, err = out.Write(tableData)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	flag.Parse()
+	if len(*flagSysConv) > 0 {
+		err := convertSysFw()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	err := dmiDecode(os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
